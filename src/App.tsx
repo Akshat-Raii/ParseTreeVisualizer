@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import CodeEditor from './components/CodeEditor';
 import ParseTree from './components/ParseTree';
 import TokenDisplay from './components/TokenDisplay';
+import ComplexityAnalysis from './components/ComplexityAnalysis';
 import { compileCode } from './compiler/compiler';
 import { Info, AlertCircle, Clock, AlertTriangle } from 'lucide-react';
 
@@ -18,15 +19,15 @@ int main() {
   return x;
 }`);
   const [compileResult, setCompileResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<any>(null);
 
   const handleCompile = () => {
     try {
       const result = compileCode(code);
       setCompileResult(result);
       setError(null);
-    } catch (err) {
-      setError((err as Error).message);
+    } catch (err: any) {
+      setError(err);
       setCompileResult(null);
     }
   };
@@ -76,15 +77,26 @@ int main() {
             </div>
             <div className="p-4">
               {error && (
-                <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-md flex items-start">
-                  <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
-                  <span>{error}</span>
+                <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-md">
+                  <div className="flex items-start">
+                    <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-medium">{error.type || 'Error'}</h3>
+                      <p className="mt-1">{error.message}</p>
+                      {error.location && (
+                        <p className="mt-1 text-sm">
+                          at line {error.location.line}, column {error.location.column}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
               
               {compileResult && (
                 <div className="space-y-6">
                   <TokenDisplay tokens={compileResult.tokens} />
+                  <ComplexityAnalysis complexity={compileResult.complexity} />
                   <div>
                     <h3 className="text-md font-medium mb-2">Parse Tree</h3>
                     <div className="border border-gray-200 dark:border-gray-700 rounded-md p-4 overflow-auto max-h-[600px]">
@@ -145,21 +157,21 @@ int main() {
             <div className="p-4">
               <div className="space-y-4">
                 <div className="border-l-4 border-blue-500 pl-4">
-                  <h3 className="font-medium text-blue-700 dark:text-blue-400">Lexical Analysis</h3>
+                  <h3 className="font-medium text-blue-700 dark:text-blue-400">Time Complexity</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    O(n) - Linear time complexity where n is the length of the input code.
+                    Analysis of how execution time grows with input size, considering loops and nested operations.
                   </p>
                 </div>
                 <div className="border-l-4 border-green-500 pl-4">
-                  <h3 className="font-medium text-green-700 dark:text-green-400">Parsing</h3>
+                  <h3 className="font-medium text-green-700 dark:text-green-400">Space Complexity</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    O(n) - Linear time for recursive descent parsing with a well-structured grammar.
+                    Measurement of memory usage based on variable declarations and data structures.
                   </p>
                 </div>
                 <div className="border-l-4 border-purple-500 pl-4">
-                  <h3 className="font-medium text-purple-700 dark:text-purple-400">AST Construction</h3>
+                  <h3 className="font-medium text-purple-700 dark:text-purple-400">Code Analysis</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    O(n) - Linear space complexity for storing the Abstract Syntax Tree.
+                    Detailed breakdown of code structure and potential optimization opportunities.
                   </p>
                 </div>
               </div>
@@ -189,10 +201,10 @@ int main() {
             </div>
             
             <div>
-              <h3 className="text-lg font-medium mb-2">3. Visualization</h3>
+              <h3 className="text-lg font-medium mb-2">3. Complexity Analysis</h3>
               <p className="text-gray-700 dark:text-gray-300">
-                Our compiler visualizes both the tokens and the parse tree to help you understand how the compiler
-                interprets your code. Click on any node in the parse tree to expand or collapse it.
+                The compiler analyzes your code's time and space complexity by examining loops, variable declarations,
+                and nested operations. This helps you understand the performance characteristics of your code.
               </p>
             </div>
             
@@ -205,6 +217,8 @@ int main() {
                 <li>Loops (for, while)</li>
                 <li>Function declarations and calls</li>
                 <li>Comments (single-line and multi-line)</li>
+                <li>Time and space complexity analysis</li>
+                <li>Detailed error reporting with line and column information</li>
               </ul>
             </div>
           </div>
