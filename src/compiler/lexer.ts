@@ -1,3 +1,5 @@
+import { CompilationError } from './types';
+
 export interface Token {
   type: string;
   value: string;
@@ -66,36 +68,35 @@ export class Lexer {
 
   private skipComment(): void {
     if (this.currentChar === '/' && this.peek() === '/') {
-      // Skip the current line (single-line comment)
       while (this.currentChar !== null && this.currentChar !== '\n') {
         this.advance();
       }
-      
-      // Skip the newline character
       if (this.currentChar === '\n') {
         this.line++;
         this.column = 1;
         this.advance();
       }
     } else if (this.currentChar === '/' && this.peek() === '*') {
-      // Skip until we find the closing '*/' (multi-line comment)
-      this.advance(); // Skip '/'
-      this.advance(); // Skip '*'
-      
+      this.advance();
+      this.advance();
       let prevChar = null;
       while (!(prevChar === '*' && this.currentChar === '/') && this.currentChar !== null) {
+        if (this.currentChar === null) {
+          throw new CompilationError('Unclosed multi-line comment', {
+            type: 'LexicalError',
+            line: this.line,
+            column: this.column
+          });
+        }
         prevChar = this.currentChar;
-        
         if (this.currentChar === '\n') {
           this.line++;
           this.column = 1;
         }
-        
         this.advance();
       }
-      
       if (this.currentChar === '/') {
-        this.advance(); // Skip the closing '/'
+        this.advance();
       }
     }
   }
@@ -109,7 +110,6 @@ export class Lexer {
       this.advance();
     }
     
-    // Check if the identifier is a keyword
     const keywords = [
       'int', 'char', 'float', 'double', 'void', 
       'if', 'else', 'while', 'for', 'return', 'printf'
@@ -128,21 +128,21 @@ export class Lexer {
   private number(): Token {
     let result = '';
     const startColumn = this.column;
+    let hasDecimal = false;
     
-    while (this.currentChar !== null && this.isDigit(this.currentChar)) {
+    while (this.currentChar !== null && (this.isDigit(this.currentChar) || this.currentChar === '.')) {
+      if (this.currentChar === '.') {
+        if (hasDecimal) {
+          throw new CompilationError('Invalid number format: multiple decimal points', {
+            type: 'LexicalError',
+            line: this.line,
+            column: this.column
+          });
+        }
+        hasDecimal = true;
+      }
       result += this.currentChar;
       this.advance();
-    }
-    
-    // Handle decimal point
-    if (this.currentChar === '.' && this.peek() !== null && this.isDigit(this.peek()!)) {
-      result += this.currentChar; // Add the decimal point
-      this.advance();
-      
-      while (this.currentChar !== null && this.isDigit(this.currentChar)) {
-        result += this.currentChar;
-        this.advance();
-      }
     }
     
     return {
@@ -157,7 +157,6 @@ export class Lexer {
     const startColumn = this.column;
     let value = this.currentChar!;
     
-    // Check for multi-character operators
     const peekChar = this.peek();
     if (
       (this.currentChar === '=' && peekChar === '=') ||
@@ -199,24 +198,20 @@ export class Lexer {
   private comment(): Token {
     const startColumn = this.column;
     let value = '';
-    let type = 'COMMENT';
     
-    // Single-line comment
     if (this.currentChar === '/' && this.peek() === '/') {
       value = '//';
-      this.advance(); // Skip '/'
-      this.advance(); // Skip '/'
+      this.advance();
+      this.advance();
       
       while (this.currentChar !== null && this.currentChar !== '\n') {
         value += this.currentChar;
         this.advance();
       }
-    }
-    // Multi-line comment
-    else if (this.currentChar === '/' && this.peek() === '*') {
+    } else if (this.currentChar === '/' && this.peek() === '*') {
       value = '/*';
-      this.advance(); // Skip '/'
-      this.advance(); // Skip '*'
+      this.advance();
+      this.advance();
       
       let prevChar = null;
       while (!(prevChar === '*' && this.currentChar === '/') && this.currentChar !== null) {
@@ -233,12 +228,12 @@ export class Lexer {
       
       if (this.currentChar === '/') {
         value += '/';
-        this.advance(); // Skip the closing '/'
+        this.advance();
       }
     }
     
     return {
-      type,
+      type: 'COMMENT',
       value,
       line: this.line,
       column: startColumn
@@ -249,44 +244,52 @@ export class Lexer {
     const tokens: Token[] = [];
     
     while (this.currentChar !== null) {
-      // Skip whitespace
-      if (this.isWhitespace(this.currentChar)) {
-        this.skipWhitespace();
-        continue;
+      try {
+        if (this.isWhitespace(this.currentChar)) {
+          this.skipWhitespace();
+          continue;
+        }
+        
+        if (this.currentChar === '/' && (this.peek() === '/' || this.peek() === '*')) {
+          tokens.push(this.comment());
+          continue;
+        }
+        
+        if (this.isAlpha(this.currentChar)) {
+          tokens.push(this.identifier());
+          continue;
+        }
+        
+        if (this.isDigit(this.currentChar)) {
+          tokens.push(this.number());
+          continue;
+        }
+        
+        if (['+', '-', '*', '/', '%', '=', '<', '>', '!', '&', '|'].includes(this.currentChar)) {
+          tokens.push(this.operator());
+          continue;
+        }
+        
+        if ([';', ',', '(', ')', '{', '}', '[', ']'].includes(this.currentChar)) {
+          tokens.push(this.punctuation());
+          continue;
+        }
+        
+        throw new CompilationError(`Invalid character '${this.currentChar}'`, {
+          type: 'LexicalError',
+          line: this.line,
+          column: this.column
+        });
+      } catch (error) {
+        if (error instanceof CompilationError) {
+          throw error;
+        }
+        throw new CompilationError(`Unexpected error during lexical analysis`, {
+          type: 'LexicalError',
+          line: this.line,
+          column: this.column
+        });
       }
-      
-      // Handle comments
-      if (this.currentChar === '/' && (this.peek() === '/' || this.peek() === '*')) {
-        tokens.push(this.comment());
-        continue;
-      }
-      
-      // Handle identifiers and keywords
-      if (this.isAlpha(this.currentChar)) {
-        tokens.push(this.identifier());
-        continue;
-      }
-      
-      // Handle numbers
-      if (this.isDigit(this.currentChar)) {
-        tokens.push(this.number());
-        continue;
-      }
-      
-      // Handle operators
-      if (['+', '-', '*', '/', '%', '=', '<', '>', '!', '&', '|'].includes(this.currentChar)) {
-        tokens.push(this.operator());
-        continue;
-      }
-      
-      // Handle punctuation
-      if ([';', ',', '(', ')', '{', '}', '[', ']'].includes(this.currentChar)) {
-        tokens.push(this.punctuation());
-        continue;
-      }
-      
-      // If we get here, we encountered an unknown character
-      throw new Error(`Unexpected character '${this.currentChar}' at line ${this.line}, column ${this.column}`);
     }
     
     return tokens;
